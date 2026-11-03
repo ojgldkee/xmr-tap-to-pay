@@ -105,3 +105,40 @@ XMR Tap should never need the customer's reusable sender address. The merchant n
 ## Disclaimer
 
 XMR Tap is an independent beta project and is not affiliated with or endorsed by the Monero Project.
+
+
+## Privacy-first merchant setup
+
+The current beta now separates the merchant's **primary payout address** from customer-facing invoice destinations.
+
+For production:
+
+1. Set `XMR_TAP_DATA_KEY` to a long random secret. Merchant payout configuration and one-time refund destinations are encrypted with AES-256-GCM before being written to disk.
+2. Set `XMR_TAP_ADMIN_TOKEN` to a different long random secret. The merchant enters this as the session-only access key; it is not stored in localStorage.
+3. Set `DEMO_MODE=false` and connect the backend to the merchant's private `monero-wallet-rpc`.
+4. Set `ALLOWED_ORIGIN` to the exact merchant frontend origin instead of `*`.
+
+Example:
+
+```bash
+XMR_TAP_DATA_KEY="replace-with-a-long-random-data-encryption-secret" \
+XMR_TAP_ADMIN_TOKEN="replace-with-a-different-long-random-pos-secret" \
+DEMO_MODE=false \
+WALLET_RPC_URL="http://127.0.0.1:18082/json_rpc" \
+ALLOWED_ORIGIN="https://your-pos.example" \
+node server.js
+```
+
+The browser does not persist the full payout address after confirmation. Normal merchant screens receive only a masked identifier. Wallet RPC generates a fresh invoice subaddress, so customers do not need to see the merchant's primary address.
+
+### One-click private refunds
+
+A wallet that implements XMR Tap v2 should provide a fresh **refund-only Monero subaddress** during the original tap. The backend stores that destination encrypted and associates it only with that invoice. Later the merchant can click Refund without seeing or re-entering the customer's address.
+
+Legacy QR wallets that do not provide this field require the customer to supply a fresh refund address at refund time.
+
+### Network privacy
+
+The beta intentionally includes no analytics SDK, ad pixel, fingerprinting library, or application-level request IP logging. The QR library is vendored locally, and production price quotes are proxied through the backend instead of fetched by the merchant browser.
+
+This cannot guarantee that GitHub Pages, a hosting provider, ISP, reverse proxy, or other network infrastructure keeps no connection logs. Production deployment should choose infrastructure and logging policies consistent with the desired privacy model.
