@@ -96,3 +96,26 @@ The web beta only previews the NFC payload. True phone-to-terminal contactless b
 - Add quote-source redundancy and signed quote snapshots.
 - Audit the receipt credential and NFC protocol before asking third-party wallets to implement it.
 - Decide merchant zero-confirmation policy based on transaction value/risk.
+
+
+## v2 refund-destination extension
+
+For native NFC/tap integrations, the invoice requests a one-time refund destination:
+
+```json
+{
+  "privacy": {
+    "senderAddressRequested": false,
+    "requestOneTimeRefundAddress": true,
+    "refundAddressScope": "this invoice only"
+  }
+}
+```
+
+The compatible customer wallet should generate a fresh Monero subaddress that is used **only for refunds tied to that purchase** and return it through the protected local tap handshake. It is not the wallet's reusable primary address.
+
+The merchant POS forwards that destination to the private backend. The backend encrypts it at rest and normal merchant screens expose only a boolean such as `refundDestinationStored: true`.
+
+A refund request then specifies the invoice and USD refund amount. The backend resolves the stored destination and sends the current XMR equivalent without returning that address to the merchant UI.
+
+This extension cannot be retroactively applied to ordinary Monero QR transactions. Because Monero hides the sender, the merchant cannot derive a refund destination from a TXID. Legacy transactions therefore need a fresh address from the customer at refund time.
