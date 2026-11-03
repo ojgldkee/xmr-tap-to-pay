@@ -31,6 +31,7 @@ const ACCOUNT_INDEX = Number(process.env.XMR_ACCOUNT_INDEX || 0);
 const DATA_KEY_SECRET = process.env.XMR_TAP_DATA_KEY || '';
 const DATA_FILE = process.env.XMR_TAP_DATA_FILE || path.join(process.cwd(), 'data', 'xmrtap.enc');
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
+const ADMIN_TOKEN = process.env.XMR_TAP_ADMIN_TOKEN || '';
 
 let quoteCache = { usdPerXmr:null, at:0, source:'CoinGecko' };
 let memoryStore = { merchant:null, invoices:{} };
@@ -87,7 +88,7 @@ loadStore();
 function corsHeaders() {
   return {
     'access-control-allow-origin':ALLOWED_ORIGIN,
-    'access-control-allow-headers':'content-type',
+    'access-control-allow-headers':'content-type, x-xmr-tap-token',
     'access-control-allow-methods':'GET,POST,OPTIONS',
     'referrer-policy':'no-referrer',
     'x-content-type-options':'nosniff',
@@ -100,6 +101,16 @@ function json(res,status,body) {
   res.end(JSON.stringify(body));
 }
 function randomHex(bytes=32){ return crypto.randomBytes(bytes).toString('hex'); }
+function requireAuth(req) {
+  if (!ADMIN_TOKEN) {
+    if (DEMO_MODE) return;
+    throw new Error('XMR_TAP_ADMIN_TOKEN is required in production');
+  }
+  const supplied = String(req.headers['x-xmr-tap-token'] || '');
+  const a = Buffer.from(supplied);
+  const b = Buffer.from(ADMIN_TOKEN);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a,b)) throw new Error('unauthorized merchant request');
+}
 function demoAddress() {
   const chars='123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
   let s='8';
@@ -389,6 +400,7 @@ const server = http.createServer(async (req,res)=>{
         ok:true,
         mode:DEMO_MODE ? 'demo' : 'rpc',
         secureConfigReady:secureConfigReady(),
+        authConfigured:Boolean(ADMIN_TOKEN),
         merchantSetupComplete:Boolean(memoryStore.merchant?.payoutAddress),
         privacy:{requestLogging:false,analytics:false}
       });
@@ -404,29 +416,35 @@ const server = http.createServer(async (req,res)=>{
     }
 
     if (req.method === 'POST' && url.pathname === '/api/merchant/setup') {
+      requireAuth(req);
       return json(res,200,await setupMerchant(await readBody(req)));
     }
 
     if (req.method === 'POST' && url.pathname === '/api/merchant/profile') {
+      requireAuth(req);
       return json(res,200,await updateMerchantProfile(await readBody(req)));
     }
 
     if (req.method === 'POST' && url.pathname === '/api/invoices') {
+      requireAuth(req);
       return json(res,201,await createInvoice(await readBody(req)));
     }
 
     const refundDestinationMatch = url.pathname.match(/^\/api\/invoices\/([^/]+)\/refund-destination$/);
     if (req.method === 'POST' && refundDestinationMatch) {
+      requireAuth(req);
       return json(res,200,await registerRefundDestination(decodeURIComponent(refundDestinationMatch[1]),await readBody(req)));
     }
 
     const invoiceMatch = url.pathname.match(/^\/api\/invoices\/([^/]+)$/);
     if (req.method === 'GET' && invoiceMatch) {
+      requireAuth(req);
       const out = await checkInvoice(decodeURIComponent(invoiceMatch[1]));
       return out ? json(res,200,out) : json(res,404,{error:'invoice not found'});
     }
 
     if (req.method === 'POST' && url.pathname === '/api/refunds') {
+      requireAuth(req);
       return json(res,200,await refund(await readBody(req)));
     }
 
