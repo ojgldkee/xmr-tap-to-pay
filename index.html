@@ -316,11 +316,32 @@
         <span>XMR payout address</span>
         <code id="walletConfirmAddress"></code>
       </div>
-      <label class="confirm-checkbox"><input type="checkbox" id="walletConfirmCheckbox" /> <span>I checked the beginning and end of this address and I am sure it is correct.</span></label>
-      <div class="irreversible-warning">Monero transfers are irreversible. A wrong payout address can permanently lose funds.</div>
+      <label class="confirm-checkbox"><input type="checkbox" id="walletConfirmCheckbox" /> <span>I verified this address in my wallet.</span></label>
+      <div class="irreversible-warning">Monero transfers are irreversible. Compare the address in XMR Tap with the address shown inside your wallet before continuing.</div>
       <div class="modal-actions">
         <button class="secondary-button" id="cancelWalletConfirmBtn">Go back</button>
-        <button class="primary-button" id="confirmWalletBtn" disabled>Confirm payout wallet</button>
+        <button class="primary-button" id="confirmWalletBtn" disabled>Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="walletFinalConfirmModal" role="dialog" aria-modal="true" aria-labelledby="walletFinalConfirmTitle">
+    <div class="modal wallet-confirm-modal">
+      <div class="modal-header">
+        <div><p class="eyebrow">Step 2 of 2</p><h2 id="walletFinalConfirmTitle">Future payments will be sent to this wallet</h2></div>
+        <button class="icon-button" id="closeWalletFinalConfirmBtn">×</button>
+      </div>
+      <p>This is the final confirmation. After activation, new XMR Tap invoices will settle to this payout wallet until you change it again.</p>
+      <div class="future-payments-card">
+        <span>Future XMR payouts</span>
+        <strong>Will be sent to</strong>
+        <code id="walletFinalConfirmAddress"></code>
+      </div>
+      <label class="confirm-checkbox"><input type="checkbox" id="futurePaymentsConfirmCheckbox" /> <span>I understand that future payments will be sent to this wallet.</span></label>
+      <div class="irreversible-warning">If this address is wrong, future merchant payments can be permanently lost. Changing the payout wallet later will require this confirmation process again.</div>
+      <div class="modal-actions">
+        <button class="secondary-button" id="backToWalletReviewBtn">Back</button>
+        <button class="primary-button" id="activateWalletBtn" disabled>Activate payout wallet</button>
       </div>
     </div>
   </div>
