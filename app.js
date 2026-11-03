@@ -785,14 +785,33 @@ function reviewWallet() {
   if (!validMoneroAddress(address)) return toast('That does not look like a valid Monero address.');
   state.pendingPayoutAddress = address;
   $('walletConfirmAddress').textContent = address;
+  $('walletFinalConfirmAddress').textContent = address;
   $('walletConfirmCheckbox').checked = false;
+  $('futurePaymentsConfirmCheckbox').checked = false;
   $('confirmWalletBtn').disabled = true;
+  $('activateWalletBtn').disabled = true;
+  $('walletFinalConfirmModal').classList.add('hidden');
+  $('walletConfirmModal').classList.remove('hidden');
+}
+
+function continueWalletConfirmation() {
+  const address = state.pendingPayoutAddress;
+  if (!validMoneroAddress(address) || !$('walletConfirmCheckbox').checked) return;
+  $('walletFinalConfirmAddress').textContent = address;
+  $('futurePaymentsConfirmCheckbox').checked = false;
+  $('activateWalletBtn').disabled = true;
+  $('walletConfirmModal').classList.add('hidden');
+  $('walletFinalConfirmModal').classList.remove('hidden');
+}
+
+function backToWalletReview() {
+  $('walletFinalConfirmModal').classList.add('hidden');
   $('walletConfirmModal').classList.remove('hidden');
 }
 
 async function confirmWallet() {
   const address = state.pendingPayoutAddress;
-  if (!validMoneroAddress(address) || !$('walletConfirmCheckbox').checked) return;
+  if (!validMoneroAddress(address) || !$('walletConfirmCheckbox').checked || !$('futurePaymentsConfirmCheckbox').checked) return;
 
   const base = $('backendUrlInput').value.trim();
   state.settings.backendUrl = base;
@@ -833,6 +852,7 @@ async function confirmWallet() {
   $('merchantWalletInput').value = '';
   saveSettingsLocal();
   $('walletConfirmModal').classList.add('hidden');
+  $('walletFinalConfirmModal').classList.add('hidden');
   renderSetupState();
   await updateModeLabel();
   toast(backendManaged ? 'Payout wallet encrypted and saved on the private backend.' : 'Demo payout confirmed. Add a private backend before accepting real funds.');
@@ -1005,10 +1025,15 @@ function bindEvents() {
   $('removeProfileImageBtn').addEventListener('click', removeProfileImage);
   $('reviewWalletBtn').addEventListener('click', reviewWallet);
   $('walletConfirmCheckbox').addEventListener('change', e => { $('confirmWalletBtn').disabled = !e.target.checked; });
-  $('confirmWalletBtn').addEventListener('click', confirmWallet);
+  $('confirmWalletBtn').addEventListener('click', continueWalletConfirmation);
+  $('futurePaymentsConfirmCheckbox').addEventListener('change', e => { $('activateWalletBtn').disabled = !e.target.checked; });
+  $('activateWalletBtn').addEventListener('click', confirmWallet);
   $('closeWalletConfirmBtn').addEventListener('click', () => $('walletConfirmModal').classList.add('hidden'));
   $('cancelWalletConfirmBtn').addEventListener('click', () => $('walletConfirmModal').classList.add('hidden'));
   $('walletConfirmModal').addEventListener('click', e => { if(e.target === $('walletConfirmModal')) $('walletConfirmModal').classList.add('hidden'); });
+  $('closeWalletFinalConfirmBtn').addEventListener('click', () => $('walletFinalConfirmModal').classList.add('hidden'));
+  $('backToWalletReviewBtn').addEventListener('click', backToWalletReview);
+  $('walletFinalConfirmModal').addEventListener('click', e => { if(e.target === $('walletFinalConfirmModal')) $('walletFinalConfirmModal').classList.add('hidden'); });
   $('changeWalletBtn').addEventListener('click', changeWallet);
 
   $('closeTransactionBtn').addEventListener('click', closeTransaction);
@@ -1018,6 +1043,7 @@ function bindEvents() {
       closeTransaction();
       $('nfcModal').classList.add('hidden');
       $('walletConfirmModal').classList.add('hidden');
+      $('walletFinalConfirmModal').classList.add('hidden');
     }
   });
 }
