@@ -34,7 +34,8 @@ const state = {
   detailInvoiceId: null,
   merchantKeyPair: null,
   paymentPollTimer: null,
-  backendHealth: null
+  backendHealth: null,
+  accessToken: sessionStorage.getItem('xmrtap.accessToken') || ''
 };
 
 const $ = id => document.getElementById(id);
@@ -81,6 +82,11 @@ function makeDemoAddress() {
 }
 function merchantInitial() {
   return (state.settings.merchantName || 'M').trim().charAt(0).toUpperCase() || 'M';
+}
+function authHeaders(extra={}) {
+  const headers = { ...extra };
+  if (state.accessToken) headers['X-XMR-Tap-Token'] = state.accessToken;
+  return headers;
 }
 
 function setAvatar(el, image) {
@@ -313,7 +319,7 @@ async function createInvoice() {
     try {
       const r = await fetch(`${base.replace(/\/$/,'')}/api/invoices`, {
         method:'POST',
-        headers:{'Content-Type':'application/json'},
+        headers:authHeaders({'Content-Type':'application/json'}),
         referrerPolicy:'no-referrer',
         body:JSON.stringify({ invoiceId:id, amountUsd, xmrAmount, quoteUsdPerXmr:quote, note, reference })
       });
@@ -439,7 +445,7 @@ async function registerPrivateRefundDestination(inv, address) {
     try {
       const r = await fetch(`${base.replace(/\/$/,'')}/api/invoices/${encodeURIComponent(inv.id)}/refund-destination`, {
         method:'POST',
-        headers:{'Content-Type':'application/json'},
+        headers:authHeaders({'Content-Type':'application/json'}),
         referrerPolicy:'no-referrer',
         body:JSON.stringify({address})
       });
@@ -735,7 +741,7 @@ async function processRefund() {
     try {
       const r = await fetch(`${base.replace(/\/$/,'')}/api/refunds`, {
         method:'POST',
-        headers:{'Content-Type':'application/json'},
+        headers:authHeaders({'Content-Type':'application/json'}),
         referrerPolicy:'no-referrer',
         body:JSON.stringify({
           invoiceId:inv.id,
@@ -790,6 +796,9 @@ async function confirmWallet() {
 
   const base = $('backendUrlInput').value.trim();
   state.settings.backendUrl = base;
+  state.accessToken = $('merchantAccessKeyInput').value.trim();
+  if (state.accessToken) sessionStorage.setItem('xmrtap.accessToken', state.accessToken);
+  if (base && !state.accessToken) return toast('Enter the merchant access key for the private backend.');
   let backendManaged = false;
   let masked = maskAddress(address);
 
@@ -797,7 +806,7 @@ async function confirmWallet() {
     try {
       const r = await fetch(`${base.replace(/\/$/,'')}/api/merchant/setup`, {
         method:'POST',
-        headers:{'Content-Type':'application/json'},
+        headers:authHeaders({'Content-Type':'application/json'}),
         referrerPolicy:'no-referrer',
         body:JSON.stringify({
           merchantName:$('merchantNameInput').value.trim() || state.settings.merchantName,
@@ -844,13 +853,17 @@ function saveSettingsLocal() {
   saveJson(STORAGE.settings, state.settings);
 }
 
-function saveProfile() {
+async function saveProfile() {
   state.settings.merchantName = $('merchantNameInput').value.trim() || 'Merchant';
   state.settings.backendUrl = $('backendUrlInput').value.trim();
+  state.accessToken = $('merchantAccessKeyInput').value.trim();
+  if (state.accessToken) sessionStorage.setItem('xmrtap.accessToken', state.accessToken);
+  else sessionStorage.removeItem('xmrtap.accessToken');
   saveSettingsLocal();
   renderMerchantIdentity();
   renderSetupState();
-  updateModeLabel();
+  await syncBackendProfile();
+  await updateModeLabel();
   toast('Merchant profile saved.');
 }
 
@@ -860,7 +873,7 @@ async function syncBackendProfile() {
   try {
     await fetch(`${base.replace(/\/$/,'')}/api/merchant/profile`, {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:authHeaders({'Content-Type':'application/json'}),
       referrerPolicy:'no-referrer',
       body:JSON.stringify({
         merchantName:state.settings.merchantName,
@@ -899,7 +912,7 @@ function startPaymentPolling() {
     const current = activeInvoice();
     if (!current || current.status !== 'waiting') return clearInterval(state.paymentPollTimer);
     try {
-      const r = await fetch(`${base.replace(/\/$/,'')}/api/invoices/${encodeURIComponent(current.id)}`, { referrerPolicy:'no-referrer' });
+      const r = await fetch(`${base.replace(/\/$/,'')}/api/invoices/${encodeURIComponent(current.id)}`, { headers:authHeaders(), referrerPolicy:'no-referrer' });
       if (!r.ok) return;
       const data = await r.json();
       if (data.refundDestinationStored) current.refundDestinationStored = true;
@@ -1022,6 +1035,7 @@ async function init() {
 
   $('merchantNameInput').value = state.settings.merchantName;
   $('backendUrlInput').value = state.settings.backendUrl || '';
+  $('merchantAccessKeyInput').value = state.accessToken || '';
 
   bindEvents();
   renderMerchantIdentity();
