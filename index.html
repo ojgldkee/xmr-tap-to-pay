@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0b0c10" />
+  <meta name="theme-color" content="#090a0d" />
   <meta name="description" content="XMR Tap beta merchant point-of-sale for private, direct Monero payments." />
   <title>XMR Tap — Merchant Beta</title>
   <link rel="manifest" href="manifest.webmanifest" />
@@ -31,7 +31,7 @@
 
       <div class="sidebar-bottom">
         <div class="status-chip"><span class="dot"></span><span id="modeLabel">Demo mode</span></div>
-        <p>Direct XMR settlement. Customer sender address is not requested or stored.</p>
+        <p>Direct XMR settlement. Customer sender address is never requested by XMR Tap.</p>
       </div>
     </aside>
 
@@ -52,10 +52,7 @@
         <div class="sale-grid">
           <section class="panel checkout-panel">
             <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Checkout</p>
-                <h2>Charge customer</h2>
-              </div>
+              <div><p class="eyebrow">Checkout</p><h2>Charge customer</h2></div>
               <div class="secure-label">Private by default</div>
             </div>
 
@@ -65,15 +62,18 @@
               <input id="saleAmount" inputmode="decimal" autocomplete="off" placeholder="0.00" aria-label="Sale amount in USD" />
             </div>
 
-            <label class="field-label" for="saleNote">Order note <span>optional</span></label>
-            <input id="saleNote" class="text-input" maxlength="80" placeholder="Coffee, order #1042, table 7…" />
-
             <div class="quick-amounts">
               <button data-amount="5">$5</button>
               <button data-amount="10">$10</button>
               <button data-amount="25">$25</button>
               <button data-amount="50">$50</button>
             </div>
+
+            <label class="field-label" for="saleNote">What did they buy? <span>shown in transaction record</span></label>
+            <input id="saleNote" class="text-input" maxlength="120" placeholder="2 coffees + blueberry muffin" />
+
+            <label class="field-label" for="saleReference">Order / receipt reference <span>optional</span></label>
+            <input id="saleReference" class="text-input" maxlength="60" placeholder="Order #1042, table 7, SKU..." />
 
             <div class="summary-card">
               <div><span>Customer pays</span><strong id="customerPays">$0.00</strong></div>
@@ -82,25 +82,31 @@
               <div class="net-row"><span>Merchant net</span><strong id="merchantNet">$0.00</strong></div>
             </div>
 
+            <div id="walletCheckoutHint" class="wallet-hint">
+              <span class="wallet-hint-dot"></span>
+              <div><strong>No merchant wallet connected</strong><small>Add your XMR receiving address in Settings, or connect Wallet RPC for unique invoice subaddresses.</small></div>
+            </div>
+
             <button class="primary-button" id="createInvoiceBtn">Create payment request</button>
-            <p class="fine-print">The customer is charged the USD sticker price converted to XMR. The 1% platform fee is charged to the merchant and tracked separately.</p>
+            <p class="fine-print">Customer pays the USD sticker price converted to XMR. The 1% XMR Tap fee is a merchant fee and is tracked separately.</p>
           </section>
 
           <section class="panel payment-panel" id="paymentPanel">
             <div id="emptyPaymentState" class="empty-state">
               <div class="empty-icon">⌁</div>
               <h3>Ready for a payment</h3>
-              <p>Create an invoice to generate a unique Monero payment request, QR fallback, and NFC protocol payload.</p>
+              <p>Create an invoice to generate a Monero payment request, QR fallback, and XMR Tap NFC payload.</p>
             </div>
 
             <div id="activePaymentState" class="hidden">
               <div class="payment-topline">
                 <span class="status-pill waiting" id="paymentStatusPill">Waiting for payment</span>
-                <span class="invoice-id" id="invoiceIdLabel">—</span>
+                <button class="link-button invoice-id" id="invoiceIdButton">—</button>
               </div>
 
               <div class="pay-amount" id="invoiceUsdAmount">$0.00</div>
               <div class="pay-xmr" id="invoiceXmrAmount">0.000000 XMR</div>
+              <div class="purchase-caption" id="invoicePurchaseCaption"></div>
 
               <div class="qr-wrap"><div id="qrCode"></div></div>
 
@@ -114,6 +120,11 @@
                 <strong>Not requested</strong>
               </div>
 
+              <div class="settlement-strip">
+                <div><span>Settlement</span><strong id="settlementModeLabel">—</strong></div>
+                <code id="settlementAddressLabel">—</code>
+              </div>
+
               <div class="demo-controls" id="demoControls">
                 <div>
                   <strong>Beta simulator</strong>
@@ -122,17 +133,8 @@
                 <button class="primary-button compact" id="simulatePayBtn">Simulate payment</button>
               </div>
 
-              <div class="tx-box hidden" id="txBox">
-                <span>Transaction ID</span>
-                <code id="txidLabel">—</code>
-              </div>
-
-              <div class="receipt-box hidden" id="receiptBox">
-                <div>
-                  <span>Cryptographic receipt</span>
-                  <strong id="receiptIdLabel">—</strong>
-                </div>
-                <button class="secondary-button compact" id="downloadReceiptBtn">Download receipt</button>
+              <div class="paid-actions hidden" id="paidActions">
+                <button class="primary-button" id="viewPaidTransactionBtn">View transaction & receipt</button>
               </div>
             </div>
           </section>
@@ -141,15 +143,24 @@
 
       <section class="view" id="activityView">
         <section class="panel full-panel">
-          <div class="panel-heading">
+          <div class="panel-heading activity-heading">
             <div><p class="eyebrow">Ledger</p><h2>Payment activity</h2></div>
             <button class="secondary-button compact" id="exportBtn">Export CSV</button>
           </div>
+
           <div class="metrics-row">
             <div class="metric"><span>Gross sales</span><strong id="grossMetric">$0.00</strong></div>
             <div class="metric"><span>Fees accrued</span><strong id="feesMetric">$0.00</strong></div>
             <div class="metric"><span>Merchant net</span><strong id="netMetric">$0.00</strong></div>
           </div>
+
+          <div class="activity-search-wrap">
+            <span>⌕</span>
+            <input id="activitySearch" autocomplete="off" placeholder="Search invoice, TXID, receipt, item, order reference, amount…" />
+            <button class="clear-search hidden" id="clearActivitySearch">Clear</button>
+          </div>
+          <div class="search-meta"><span id="activityCount">0 transactions</span><span>Tap any transaction to open full details</span></div>
+
           <div id="activityList" class="activity-list"></div>
         </section>
       </section>
@@ -158,9 +169,9 @@
         <div class="refund-grid">
           <section class="panel">
             <div class="panel-heading"><div><p class="eyebrow">Returns</p><h2>Find a purchase</h2></div></div>
-            <label class="field-label" for="refundSearch">Invoice, receipt, or TXID</label>
+            <label class="field-label" for="refundSearch">Invoice, receipt, TXID, item, or order reference</label>
             <div class="search-row">
-              <input id="refundSearch" class="text-input" placeholder="XRT-…, receipt ID, or transaction ID" />
+              <input id="refundSearch" class="text-input" placeholder="Search any transaction detail…" />
               <button class="secondary-button" id="findRefundBtn">Find</button>
             </div>
             <div id="refundSearchResult" class="refund-result empty-small">No purchase selected.</div>
@@ -182,7 +193,7 @@
                 <div><span>Original XMR amount</span><strong>Not used</strong></div>
               </div>
               <button class="primary-button" id="processRefundBtn">Process refund</button>
-              <p class="fine-print">In demo mode no XMR is transmitted. In RPC mode the backend calls Monero Wallet RPC <code>transfer</code>.</p>
+              <p class="fine-print">The refund is based on USD value. A fresh XMR address is supplied by the customer for the refund transaction.</p>
             </div>
           </section>
         </div>
@@ -194,18 +205,29 @@
             <div class="panel-heading"><div><p class="eyebrow">Business</p><h2>Merchant settings</h2></div></div>
             <label class="field-label" for="merchantNameInput">Merchant display name</label>
             <input id="merchantNameInput" class="text-input" value="Demo Merchant" />
-            <label class="field-label" for="backendUrlInput">Backend URL</label>
+
+            <label class="field-label" for="merchantWalletInput">Merchant XMR receiving address</label>
+            <textarea id="merchantWalletInput" class="text-input address-input" rows="3" placeholder="Paste your primary Monero address here"></textarea>
+            <div id="walletStatusCard" class="connection-card">
+              <div class="connection-icon">M</div>
+              <div><strong>No wallet connected</strong><small>Payments stay in demo mode until you add an address or Wallet RPC.</small></div>
+            </div>
+            <p class="field-help">Quick-connect sends payment requests directly to this address. For automatic invoice matching, connect the backend to the same merchant wallet through Wallet RPC so XMR Tap can create a unique subaddress for each sale.</p>
+
+            <label class="field-label" for="backendUrlInput">Backend URL <span>optional advanced mode</span></label>
             <input id="backendUrlInput" class="text-input" placeholder="http://localhost:8787" />
-            <button class="primary-button" id="saveSettingsBtn">Save settings</button>
+
+            <button class="primary-button" id="saveSettingsBtn">Save merchant settings</button>
           </section>
           <section class="panel">
-            <div class="panel-heading"><div><p class="eyebrow">Processing</p><h2>Beta configuration</h2></div></div>
+            <div class="panel-heading"><div><p class="eyebrow">Processing</p><h2>Settlement configuration</h2></div></div>
             <div class="setting-row"><span>Merchant fee</span><strong>1.00%</strong></div>
-            <div class="setting-row"><span>Settlement</span><strong>Direct XMR</strong></div>
+            <div class="setting-row"><span>Customer pays</span><strong>Full USD sticker price</strong></div>
+            <div class="setting-row"><span>Settlement</span><strong>Direct XMR → merchant wallet</strong></div>
             <div class="setting-row"><span>Customer identity</span><strong>Not required</strong></div>
             <div class="setting-row"><span>Sender address storage</span><strong>None</strong></div>
-            <div class="setting-row"><span>Refund denomination</span><strong>USD value → XMR</strong></div>
-            <div class="callout">Production mode requires a server-side Monero Wallet RPC connection. Never expose wallet RPC credentials or private keys in the browser.</div>
+            <div class="setting-row"><span>Refund denomination</span><strong>USD value → current XMR</strong></div>
+            <div class="callout"><strong>Best merchant setup:</strong> Wallet RPC uses the merchant's wallet and generates one fresh subaddress per invoice. That lets the POS automatically match incoming XMR to the exact sale without learning the customer's reusable address.</div>
           </section>
         </div>
       </section>
@@ -215,9 +237,19 @@
   <div class="modal-backdrop hidden" id="nfcModal" role="dialog" aria-modal="true" aria-labelledby="nfcTitle">
     <div class="modal">
       <div class="modal-header"><div><p class="eyebrow">Open protocol preview</p><h2 id="nfcTitle">NFC payment payload</h2></div><button class="icon-button" id="closeNfcBtn">×</button></div>
-      <p>A compatible wallet would receive this invoice payload over NFC. The wallet does <strong>not</strong> send its reusable Monero address back to the merchant.</p>
+      <p>A compatible wallet receives this invoice payload over NFC. It does <strong>not</strong> send its reusable Monero address back to the merchant.</p>
       <pre id="nfcPayloadPreview"></pre>
       <div class="modal-actions"><button class="secondary-button" id="copyNfcBtn">Copy payload</button><button class="primary-button" id="simulateWalletTapBtn">Simulate wallet tap</button></div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="transactionModal" role="dialog" aria-modal="true" aria-labelledby="transactionTitle">
+    <div class="modal transaction-modal">
+      <div class="modal-header sticky-modal-header">
+        <div><p class="eyebrow">Transaction record</p><h2 id="transactionTitle">Payment details</h2></div>
+        <button class="icon-button" id="closeTransactionBtn">×</button>
+      </div>
+      <div id="transactionDetail"></div>
     </div>
   </div>
 
