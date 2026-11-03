@@ -285,7 +285,9 @@
 
             <label class="field-label" for="backendUrlInput">Private backend URL <span>required for secure production setup</span></label>
             <input id="backendUrlInput" class="text-input" placeholder="https://payments.yourdomain.com" />
-            <p class="field-help">Production mode should keep payout configuration and Wallet RPC server-side. GitHub Pages is only the beta frontend.</p>
+            <label class="field-label" for="merchantAccessKeyInput">Merchant access key <span>session only</span></label>
+            <input id="merchantAccessKeyInput" class="text-input" type="password" autocomplete="off" placeholder="Private POS/setup key" />
+            <p class="field-help">The access key is kept only in this browser session, not localStorage. Production mode keeps payout configuration and Wallet RPC server-side. GitHub Pages is only the beta frontend.</p>
           </section>
 
           <section class="panel settings-wide">
