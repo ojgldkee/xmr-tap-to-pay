@@ -4,11 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#090a0d" />
+  <meta name="referrer" content="no-referrer" />
+  <meta http-equiv="Permissions-Policy" content="geolocation=(), camera=(), microphone=(), interest-cohort=()" />
   <meta name="description" content="XMR Tap beta merchant point-of-sale for private, direct Monero payments." />
   <title>XMR Tap — Merchant Beta</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="styles.css" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+  <script src="vendor/qrcode.min.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -30,26 +32,42 @@
       </nav>
 
       <div class="sidebar-bottom">
-        <div class="status-chip"><span class="dot"></span><span id="modeLabel">Demo mode</span></div>
-        <p>Direct XMR settlement. Customer sender address is never requested by XMR Tap.</p>
+        <div class="status-chip"><span class="dot"></span><span id="modeLabel">Setup required</span></div>
+        <p>No analytics, ad pixels, fingerprinting, or application-level IP logging are built into XMR Tap.</p>
       </div>
     </aside>
 
     <main class="main">
       <header class="topbar">
-        <div>
-          <div class="eyebrow" id="merchantNameHeader">Demo Merchant</div>
-          <h1 id="viewTitle">New sale</h1>
+        <div class="merchant-header">
+          <div class="merchant-avatar small-avatar" id="headerAvatar">M</div>
+          <div>
+            <div class="eyebrow" id="merchantNameHeader">Merchant setup</div>
+            <h1 id="viewTitle">New sale</h1>
+          </div>
         </div>
         <div class="quote-card">
           <span>XMR / USD</span>
           <strong id="xmrQuote">$—</strong>
-          <small id="quoteStatus">Loading quote…</small>
+          <small id="quoteStatus">Private quote proxy</small>
         </div>
       </header>
 
       <section class="view active" id="saleView">
-        <div class="sale-grid">
+        <section class="setup-gate panel" id="setupGate">
+          <div class="setup-gate-icon">M</div>
+          <p class="eyebrow">Merchant onboarding</p>
+          <h2>Finish payout setup before accepting XMR</h2>
+          <p>Your store cannot create real payment requests until a payout wallet is confirmed. This prevents merchants from accidentally accepting money before they know where it will settle.</p>
+          <div class="setup-progress">
+            <div class="setup-step" id="setupStepProfile"><span>1</span><div><strong>Merchant profile</strong><small>Name + customer-facing photo</small></div></div>
+            <div class="setup-step" id="setupStepWallet"><span>2</span><div><strong>Payout wallet</strong><small>Enter and confirm XMR address</small></div></div>
+            <div class="setup-step" id="setupStepReady"><span>3</span><div><strong>Ready to accept payments</strong><small>Unlock checkout</small></div></div>
+          </div>
+          <button class="primary-button" id="completeSetupBtn">Complete merchant setup</button>
+        </section>
+
+        <div class="sale-grid hidden" id="saleGrid">
           <section class="panel checkout-panel">
             <div class="panel-heading">
               <div><p class="eyebrow">Checkout</p><h2>Charge customer</h2></div>
@@ -69,7 +87,7 @@
               <button data-amount="50">$50</button>
             </div>
 
-            <label class="field-label" for="saleNote">What did they buy? <span>shown in transaction record</span></label>
+            <label class="field-label" for="saleNote">What did they buy? <span>shown in receipt</span></label>
             <input id="saleNote" class="text-input" maxlength="120" placeholder="2 coffees + blueberry muffin" />
 
             <label class="field-label" for="saleReference">Order / receipt reference <span>optional</span></label>
@@ -82,23 +100,32 @@
               <div class="net-row"><span>Merchant net</span><strong id="merchantNet">$0.00</strong></div>
             </div>
 
-            <div id="walletCheckoutHint" class="wallet-hint">
+            <div id="walletCheckoutHint" class="wallet-hint connected">
               <span class="wallet-hint-dot"></span>
-              <div><strong>No merchant wallet connected</strong><small>Add your XMR receiving address in Settings, or connect Wallet RPC for unique invoice subaddresses.</small></div>
+              <div><strong>Payout wallet confirmed</strong><small>Your primary wallet stays hidden from normal checkout screens. Production Wallet RPC should use a fresh subaddress for each invoice.</small></div>
             </div>
 
             <button class="primary-button" id="createInvoiceBtn">Create payment request</button>
-            <p class="fine-print">Customer pays the USD sticker price converted to XMR. The 1% XMR Tap fee is a merchant fee and is tracked separately.</p>
+            <p class="fine-print">Customer pays the full USD sticker price in XMR. The 1% XMR Tap fee is charged to the merchant and tracked separately.</p>
           </section>
 
           <section class="panel payment-panel" id="paymentPanel">
             <div id="emptyPaymentState" class="empty-state">
+              <div class="customer-merchant-card">
+                <div class="merchant-avatar customer-avatar" id="customerAvatar">M</div>
+                <div><strong id="customerMerchantName">Merchant</strong><small>Verified XMR Tap merchant</small></div>
+              </div>
               <div class="empty-icon">⌁</div>
               <h3>Ready for a payment</h3>
-              <p>Create an invoice to generate a Monero payment request, QR fallback, and XMR Tap NFC payload.</p>
+              <p>Create an invoice to generate a private Monero payment request, QR fallback, and NFC payload.</p>
             </div>
 
             <div id="activePaymentState" class="hidden">
+              <div class="customer-merchant-card payment-merchant-card">
+                <div class="merchant-avatar customer-avatar" id="paymentCustomerAvatar">M</div>
+                <div><strong id="paymentCustomerMerchantName">Merchant</strong><small>You're paying this merchant</small></div>
+              </div>
+
               <div class="payment-topline">
                 <span class="status-pill waiting" id="paymentStatusPill">Waiting for payment</span>
                 <button class="link-button invoice-id" id="invoiceIdButton">—</button>
@@ -121,14 +148,14 @@
               </div>
 
               <div class="settlement-strip">
-                <div><span>Settlement</span><strong id="settlementModeLabel">—</strong></div>
-                <code id="settlementAddressLabel">—</code>
+                <div><span>Invoice destination</span><strong id="settlementModeLabel">—</strong></div>
+                <code id="settlementAddressLabel">Hidden until invoice created</code>
               </div>
 
               <div class="demo-controls" id="demoControls">
                 <div>
                   <strong>Beta simulator</strong>
-                  <span>Simulate a compatible wallet tap + incoming XMR payment.</span>
+                  <span>Simulate a wallet tap. The wallet also supplies a fresh one-time refund address privately.</span>
                 </div>
                 <button class="primary-button compact" id="simulatePayBtn">Simulate payment</button>
               </div>
@@ -148,10 +175,11 @@
             <button class="secondary-button compact" id="exportBtn">Export CSV</button>
           </div>
 
-          <div class="metrics-row">
+          <div class="metrics-grid">
             <div class="metric"><span>Gross sales</span><strong id="grossMetric">$0.00</strong></div>
             <div class="metric"><span>Fees accrued</span><strong id="feesMetric">$0.00</strong></div>
             <div class="metric"><span>Merchant net</span><strong id="netMetric">$0.00</strong></div>
+            <div class="metric"><span>Refunds</span><strong id="refundsMetric">$0.00</strong></div>
           </div>
 
           <div class="activity-search-wrap">
@@ -178,22 +206,32 @@
           </section>
 
           <section class="panel">
-            <div class="panel-heading"><div><p class="eyebrow">Refund</p><h2>Send USD value back in XMR</h2></div></div>
+            <div class="panel-heading"><div><p class="eyebrow">Refund</p><h2>One-click USD refund</h2></div></div>
             <div id="refundFormEmpty" class="empty-state small">
-              <p>Find a paid invoice first. Refunds use the requested USD value and convert it to XMR at the current refund-time quote.</p>
+              <p>Find a paid invoice first. Compatible wallets provide a fresh refund subaddress during the original tap, so the merchant can refund without asking the customer for an address later.</p>
             </div>
             <div id="refundForm" class="hidden">
               <label class="field-label" for="refundUsd">Refund USD</label>
               <div class="money-input-wrap compact-money"><span>$</span><input id="refundUsd" inputmode="decimal" /></div>
-              <label class="field-label" for="refundAddress">Customer fresh XMR refund address</label>
-              <textarea id="refundAddress" class="text-input address-input" rows="3" placeholder="Customer wallet supplies a fresh refund address during the return tap"></textarea>
+
+              <div class="private-destination-card" id="refundDestinationCard">
+                <div class="private-lock">●</div>
+                <div><span>Private refund destination</span><strong id="refundDestinationStatus">Checking…</strong><small id="refundDestinationHint">Customer address is not shown to the merchant.</small></div>
+              </div>
+
+              <div id="legacyRefundAddressWrap" class="hidden">
+                <label class="field-label" for="refundAddress">Legacy wallet refund address</label>
+                <textarea id="refundAddress" class="text-input address-input" rows="3" placeholder="Only needed for older QR wallets that did not provide a one-time refund destination"></textarea>
+              </div>
+
               <div class="summary-card refund-summary">
                 <div><span>Refund-time quote</span><strong id="refundQuote">$— / XMR</strong></div>
                 <div><span>XMR to send</span><strong id="refundXmr">0.000000 XMR</strong></div>
                 <div><span>Original XMR amount</span><strong>Not used</strong></div>
               </div>
-              <button class="primary-button" id="processRefundBtn">Process refund</button>
-              <p class="fine-print">The refund is based on USD value. A fresh XMR address is supplied by the customer for the refund transaction.</p>
+
+              <button class="primary-button" id="processRefundBtn">Refund to saved private destination</button>
+              <p class="fine-print">The refund is denominated in USD and converted to XMR using the refund-time quote. The customer’s reusable wallet address is never required.</p>
             </div>
           </section>
         </div>
@@ -202,42 +240,93 @@
       <section class="view" id="settingsView">
         <div class="settings-grid">
           <section class="panel">
-            <div class="panel-heading"><div><p class="eyebrow">Business</p><h2>Merchant settings</h2></div></div>
+            <div class="panel-heading"><div><p class="eyebrow">Merchant profile</p><h2>Customer-facing identity</h2></div></div>
+
+            <div class="profile-editor">
+              <div class="merchant-avatar profile-preview" id="profilePreview">M</div>
+              <div class="profile-upload-actions">
+                <label class="secondary-button compact upload-button" for="profileImageInput">Choose profile picture</label>
+                <input id="profileImageInput" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+                <button class="link-button" id="removeProfileImageBtn">Remove photo</button>
+              </div>
+            </div>
+            <p class="field-help">This image appears on the customer payment screen and receipt so customers can visually confirm who they are paying.</p>
+
             <label class="field-label" for="merchantNameInput">Merchant display name</label>
             <input id="merchantNameInput" class="text-input" value="Demo Merchant" />
 
-            <label class="field-label" for="merchantWalletInput">Merchant XMR receiving address</label>
-            <textarea id="merchantWalletInput" class="text-input address-input" rows="3" placeholder="Paste your primary Monero address here"></textarea>
-            <div id="walletStatusCard" class="connection-card">
-              <div class="connection-icon">M</div>
-              <div><strong>No wallet connected</strong><small>Payments stay in demo mode until you add an address or Wallet RPC.</small></div>
-            </div>
-            <p class="field-help">Quick-connect sends payment requests directly to this address. For automatic invoice matching, connect the backend to the same merchant wallet through Wallet RPC so XMR Tap can create a unique subaddress for each sale.</p>
-
-            <label class="field-label" for="backendUrlInput">Backend URL <span>optional advanced mode</span></label>
-            <input id="backendUrlInput" class="text-input" placeholder="http://localhost:8787" />
-
-            <button class="primary-button" id="saveSettingsBtn">Save merchant settings</button>
+            <button class="secondary-button" id="saveProfileBtn" style="width:100%;margin-top:14px">Save profile</button>
           </section>
+
           <section class="panel">
-            <div class="panel-heading"><div><p class="eyebrow">Processing</p><h2>Settlement configuration</h2></div></div>
-            <div class="setting-row"><span>Merchant fee</span><strong>1.00%</strong></div>
-            <div class="setting-row"><span>Customer pays</span><strong>Full USD sticker price</strong></div>
-            <div class="setting-row"><span>Settlement</span><strong>Direct XMR → merchant wallet</strong></div>
-            <div class="setting-row"><span>Customer identity</span><strong>Not required</strong></div>
-            <div class="setting-row"><span>Sender address storage</span><strong>None</strong></div>
-            <div class="setting-row"><span>Refund denomination</span><strong>USD value → current XMR</strong></div>
-            <div class="callout"><strong>Best merchant setup:</strong> Wallet RPC uses the merchant's wallet and generates one fresh subaddress per invoice. That lets the POS automatically match incoming XMR to the exact sale without learning the customer's reusable address.</div>
+            <div class="panel-heading">
+              <div><p class="eyebrow">Payouts</p><h2>Private payout wallet</h2></div>
+              <span class="setup-badge" id="payoutSetupBadge">Not configured</span>
+            </div>
+
+            <div id="walletUnconfigured">
+              <p class="settings-copy">Add the XMR address where you want merchant funds to settle. You will review the full address once before it is confirmed.</p>
+              <label class="field-label" for="merchantWalletInput">XMR payout address</label>
+              <textarea id="merchantWalletInput" class="text-input address-input" rows="3" placeholder="Paste your Monero payout address"></textarea>
+              <button class="primary-button" id="reviewWalletBtn">Review payout address</button>
+            </div>
+
+            <div id="walletConfigured" class="hidden">
+              <div class="connection-card connected">
+                <div class="connection-icon">M</div>
+                <div><strong>Payout wallet confirmed</strong><small id="maskedWalletAddress">••••</small></div>
+              </div>
+              <div class="private-storage-note">
+                <strong>Stored privately</strong>
+                <span>The full payout address is not displayed again in normal merchant screens. Only a masked identifier is shown.</span>
+              </div>
+              <button class="secondary-button" id="changeWalletBtn" style="width:100%">Change payout wallet</button>
+            </div>
+
+            <label class="field-label" for="backendUrlInput">Private backend URL <span>required for secure production setup</span></label>
+            <input id="backendUrlInput" class="text-input" placeholder="https://payments.yourdomain.com" />
+            <p class="field-help">Production mode should keep payout configuration and Wallet RPC server-side. GitHub Pages is only the beta frontend.</p>
+          </section>
+
+          <section class="panel settings-wide">
+            <div class="panel-heading"><div><p class="eyebrow">Privacy</p><h2>Privacy-first defaults</h2></div></div>
+            <div class="privacy-grid">
+              <div class="privacy-feature"><strong>No analytics</strong><span>No Google Analytics, Meta Pixel, ad SDKs, or fingerprinting scripts.</span></div>
+              <div class="privacy-feature"><strong>No application IP logs</strong><span>The XMR Tap backend code does not store client IP addresses or User-Agent strings.</span></div>
+              <div class="privacy-feature"><strong>No third-party QR CDN</strong><span>The QR library is served locally from this repository instead of loaded from a tracking-capable CDN.</span></div>
+              <div class="privacy-feature"><strong>Private quote proxy</strong><span>In production, XMR/USD quotes are fetched server-side so the merchant browser does not contact the price provider directly.</span></div>
+            </div>
+            <div class="callout"><strong>Important:</strong> hosting providers and network infrastructure may still retain connection logs outside this app’s control. XMR Tap itself does not intentionally collect them.</div>
           </section>
         </div>
       </section>
     </main>
   </div>
 
+  <div class="modal-backdrop hidden" id="walletConfirmModal" role="dialog" aria-modal="true" aria-labelledby="walletConfirmTitle">
+    <div class="modal wallet-confirm-modal">
+      <div class="modal-header">
+        <div><p class="eyebrow">Final check</p><h2 id="walletConfirmTitle">Confirm payout wallet</h2></div>
+        <button class="icon-button" id="closeWalletConfirmBtn">×</button>
+      </div>
+      <p>Make sure this is the exact Monero address you control. Once confirmed, XMR Tap will hide the full address from normal merchant screens.</p>
+      <div class="address-confirm-box">
+        <span>XMR payout address</span>
+        <code id="walletConfirmAddress"></code>
+      </div>
+      <label class="confirm-checkbox"><input type="checkbox" id="walletConfirmCheckbox" /> <span>I checked the beginning and end of this address and I am sure it is correct.</span></label>
+      <div class="irreversible-warning">Monero transfers are irreversible. A wrong payout address can permanently lose funds.</div>
+      <div class="modal-actions">
+        <button class="secondary-button" id="cancelWalletConfirmBtn">Go back</button>
+        <button class="primary-button" id="confirmWalletBtn" disabled>Confirm payout wallet</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-backdrop hidden" id="nfcModal" role="dialog" aria-modal="true" aria-labelledby="nfcTitle">
     <div class="modal">
       <div class="modal-header"><div><p class="eyebrow">Open protocol preview</p><h2 id="nfcTitle">NFC payment payload</h2></div><button class="icon-button" id="closeNfcBtn">×</button></div>
-      <p>A compatible wallet receives this invoice payload over NFC. It does <strong>not</strong> send its reusable Monero address back to the merchant.</p>
+      <p>A compatible wallet receives this invoice payload over NFC. It does <strong>not</strong> send its reusable Monero address. It can provide a fresh, transaction-specific refund subaddress instead.</p>
       <pre id="nfcPayloadPreview"></pre>
       <div class="modal-actions"><button class="secondary-button" id="copyNfcBtn">Copy payload</button><button class="primary-button" id="simulateWalletTapBtn">Simulate wallet tap</button></div>
     </div>
