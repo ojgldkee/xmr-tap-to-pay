@@ -1,4 +1,4 @@
-const CACHE = 'xmrtap-beta-v3';
+const CACHE = 'xmrtap-beta-v4';
 const ASSETS = ['./','./index.html','./styles.css','./app.js','./manifest.webmanifest','./vendor/qrcode.min.js'];
 
 self.addEventListener('install', event => {
